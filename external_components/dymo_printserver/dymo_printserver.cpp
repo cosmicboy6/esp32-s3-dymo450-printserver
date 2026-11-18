@@ -99,15 +99,27 @@ int text_width(const LabelFont &font, const std::vector<uint32_t> &cps) {
   return width;
 }
 
-// Blit one centered line with its ascender line at `top_y`.
+// Blit one centered line with its ascender line at `top_y`. When the text is
+// wider than the label it is scaled down (nearest-neighbour) just enough to fit,
+// so a line at its maximum length is never clipped at the edge. Short lines are
+// drawn at the font's native size, byte for byte as before.
 void draw_line(uint8_t *fb, const LabelFont &font, const std::string &text, int top_y) {
   std::vector<uint32_t> cps;
   cps.reserve(text.size());
   for (size_t i = 0; i < text.size();)
     cps.push_back(utf8_next(text, i));
 
-  const int baseline = top_y + font.ascent;
-  int x = (LABEL_W - text_width(font, cps)) / 2;
+  const int width = text_width(font, cps);
+  if (width <= 0)
+    return;
+
+  // Fixed-point scale where 1024 == 1.0; only ever shrink, never enlarge.
+  int scale = 1024;
+  if (width > LABEL_W)
+    scale = static_cast<int>(static_cast<int64_t>(LABEL_W) * 1024 / width);
+
+  const int baseline = top_y + font.ascent * scale / 1024;
+  int x = (LABEL_W - width * scale / 1024) / 2;
   for (uint32_t cp : cps) {
     const LabelGlyph *g = lookup_glyph(font, cp);
     if (g == nullptr)
@@ -115,22 +127,27 @@ void draw_line(uint8_t *fb, const LabelFont &font, const std::string &text, int 
     if (g->w > 0 && g->h > 0) {
       const int glyph_stride = (g->w + 7) / 8;
       const uint8_t *bits = font.bits + g->off;
-      for (int gy = 0; gy < g->h; gy++) {
-        const int py = baseline + g->top + gy;
+      const int dw = g->w * scale / 1024 > 0 ? g->w * scale / 1024 : 1;
+      const int dh = g->h * scale / 1024 > 0 ? g->h * scale / 1024 : 1;
+      const int left = g->left * scale / 1024;
+      const int top = g->top * scale / 1024;
+      for (int dy = 0; dy < dh; dy++) {
+        const int py = baseline + top + dy;
         if (py < 0 || py >= LABEL_H)
           continue;
-        const uint8_t *row = bits + gy * glyph_stride;
-        for (int gx = 0; gx < g->w; gx++) {
-          if ((row[gx >> 3] & (0x80 >> (gx & 7))) == 0)
+        const uint8_t *row = bits + (dy * 1024 / scale) * glyph_stride;
+        for (int dx = 0; dx < dw; dx++) {
+          const int sx = dx * 1024 / scale;
+          if ((row[sx >> 3] & (0x80 >> (sx & 7))) == 0)
             continue;
-          const int px = x + g->left + gx;
+          const int px = x + left + dx;
           if (px < 0 || px >= LABEL_W)
             continue;
           fb[py * LABEL_STRIDE + (px >> 3)] |= 0x80 >> (px & 7);
         }
       }
     }
-    x += g->adv;
+    x += g->adv * scale / 1024;
   }
 }
 
@@ -230,7 +247,8 @@ class DymoLabelWebHandler : public web_server_idf::AsyncWebHandler {
     std::string html = LABEL_FORM_HEAD;
     html += "<h1>DYMO LabelWriter 450</h1>"
             "<p class=\"sub\">Four lines in DejaVu Sans Bold, the same font as the test label. "
-            "Text that is too long is clipped at the label edge.</p>";
+            "Line 1 is drawn large (up to 20 characters); lines 2&ndash;4 take up to 26 each. "
+            "A line that is still too wide is scaled down to fit.</p>";
 
     if (is_post) {
       if (this->server_->print_label(lines[0], lines[1], lines[2], lines[3])) {
@@ -241,10 +259,10 @@ class DymoLabelWebHandler : public web_server_idf::AsyncWebHandler {
     }
 
     html += "<form method=\"post\" action=\"/print\">";
-    html += make_field("line1", "Line 1 (large)", 24, lines[0]);
-    html += make_field("line2", "Line 2", 40, lines[1]);
-    html += make_field("line3", "Line 3", 40, lines[2]);
-    html += make_field("line4", "Line 4", 40, lines[3]);
+    html += make_field("line1", "Line 1 (large, max 20)", 20, lines[0]);
+    html += make_field("line2", "Line 2 (max 26)", 26, lines[1]);
+    html += make_field("line3", "Line 3 (max 26)", 26, lines[2]);
+    html += make_field("line4", "Line 4 (max 26)", 26, lines[3]);
     html += "<button type=\"submit\">Print label</button></form></body></html>";
 
     request->send(200, "text/html", html.c_str());

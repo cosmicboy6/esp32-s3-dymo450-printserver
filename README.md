@@ -99,16 +99,17 @@ mdns:
 ## Web label form (`/print`)
 
 The device's ESPHome web server also serves a small label form at
-**`http://<device>/print`**: four text fields — the first line is large, the other
-three smaller — and a **Print label** button.
+**`http://<device>/print`**: four text fields — the first line is large (up to
+20 characters), the other three smaller (up to 26 each) — and a **Print label**
+button.
 
 The firmware renders the text into a DYMO ESC/P raster label: the same
 672 × 240 bitmap layout, bold **DejaVu Sans Bold** glyphs, and raster framing
 (`ESC @`, `ESC D 84`, `SYN`-prefixed scan lines, `ESC E`) as a label sent by the
 CUPS queue. The finished job is handed to the local raw-9100 pipeline, so it
-takes exactly the same USB path as a network job. Text that is too wide for the
-label is clipped at the edge, and Latin-1 accented characters (e.g. German
-umlauts) are supported.
+takes exactly the same USB path as a network job. A line wider than the label is
+scaled down to fit, and Latin-1 accented characters (e.g. German umlauts) are
+supported.
 
 The glyph tables are pre-rendered from DejaVuSans-Bold and committed as
 `external_components/dymo_printserver/dymo_label_font.h`; regenerate them with:
