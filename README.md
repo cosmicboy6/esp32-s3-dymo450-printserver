@@ -147,6 +147,10 @@ python3 tools/gen_label_font.py
 > The ESP32-S3 has a single USB-OTG peripheral: it is a USB **host** to the
 > printer. It cannot also act as a USB *device* at the same time.
 
+
+- USB C OTG Adapter - OTG Splitter USB C 3.2 Gen - 100W PD and USB-A
+![OTG](assets/screenshot.png)
+
 ## Repository layout
 
 ```
