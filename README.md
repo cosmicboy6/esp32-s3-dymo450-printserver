@@ -99,9 +99,9 @@ mdns:
 ## Web label form (`/print`)
 
 The device's ESPHome web server also serves a small label form at
-**`http://<device>/print`**: four text fields — the first line is large (up to
-20 characters), the other three smaller (up to 26 each) — and a **Print label**
-button.
+**`http://<device>/print`**: a single text field — one line, drawn large (up to
+20 characters) — and a **Print label** button. The field starts empty, and an
+empty form is rejected with a hint instead of printing a blank label.
 
 The firmware renders the text into a DYMO ESC/P raster label: the same
 672 × 240 bitmap layout, bold **DejaVu Sans Bold** glyphs, and raster framing

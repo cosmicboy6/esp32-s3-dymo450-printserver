@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Generate dymo_label_font.h: 1-bit glyph tables for the label form.
 
-The web form on the print server renders up to four lines of text into the
+The web form on the print server renders one line of text into the
 LabelWriter's ESC/P raster stream. The glyphs are pre-rendered from
 DejaVuSans-Bold (the same font used for the test label) so the firmware needs
 no font file and no TTF rasteriser at runtime.
@@ -27,8 +27,8 @@ FONT_FILE = Path(
 # Printable ASCII plus Latin-1 supplement (covers German umlauts / sharp s).
 CODEPOINTS = list(range(32, 127)) + list(range(160, 256))
 
-# name -> pixel size
-SIZES = {"BIG": 56, "SMALL": 38}
+# name -> pixel size (the label form draws a single large line)
+SIZES = {"BIG": 56}
 
 OUT = Path(__file__).resolve().parent.parent / "external_components/dymo_printserver/dymo_label_font.h"
 

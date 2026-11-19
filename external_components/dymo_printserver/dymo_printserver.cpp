@@ -198,7 +198,8 @@ void append_html_escaped(std::string &out, const std::string &s) {
   }
 }
 
-std::string make_field(const char *name, const char *label, int max_length, const std::string &value) {
+std::string make_field(const char *name, const char *label, int max_length, const std::string &value,
+                       const char *placeholder) {
   std::string out = "<label for=\"";
   out += name;
   out += "\">";
@@ -209,7 +210,9 @@ std::string make_field(const char *name, const char *label, int max_length, cons
   out += name;
   out += "\" maxlength=\"";
   out += std::to_string(max_length);
-  out += "\" autocomplete=\"off\" value=\"";
+  out += "\" autocomplete=\"off\" placeholder=\"";
+  append_html_escaped(out, placeholder);
+  out += "\" value=\"";
   append_html_escaped(out, value);
   out += "\">";
   return out;
@@ -231,27 +234,22 @@ class DymoLabelWebHandler : public web_server_idf::AsyncWebHandler {
   void handleRequest(web_server_idf::AsyncWebServerRequest *request) override {
     const bool is_post = request->method() == HTTP_POST;
 
-    std::string lines[4];
-    if (is_post) {
-      lines[0] = request->arg("line1");
-      lines[1] = request->arg("line2");
-      lines[2] = request->arg("line3");
-      lines[3] = request->arg("line4");
-    } else {
-      lines[0] = "DYMO 450";
-      lines[1] = "CUPS queue: DYMO450";
-      lines[2] = "ESP32-S3 192.168.0.240:9100";
-      lines[3] = "";
-    }
+    // GET starts with an empty form; only a POST carries a value. Nothing is
+    // pre-filled, so opening or reloading the page can never print a label.
+    std::string line;
+    if (is_post)
+      line = request->arg("line1");
 
     std::string html = LABEL_FORM_HEAD;
     html += "<h1>DYMO LabelWriter 450</h1>"
-            "<p class=\"sub\">Four lines in DejaVu Sans Bold, the same font as the test label. "
-            "Line 1 is drawn large (up to 20 characters); lines 2&ndash;4 take up to 26 each. "
-            "A line that is still too wide is scaled down to fit.</p>";
+            "<p class=\"sub\">One line in DejaVu Sans Bold, the same font as the test label. "
+            "It is drawn large (up to 20 characters) and centred on the label; a line that is "
+            "still too wide is scaled down to fit.</p>";
 
     if (is_post) {
-      if (this->server_->print_label(lines[0], lines[1], lines[2], lines[3])) {
+      if (line.empty()) {
+        html += "<p class=\"err\">Enter some text before printing.</p>";
+      } else if (this->server_->print_label(line)) {
         html += "<p class=\"ok\">Label sent to the printer.</p>";
       } else {
         html += "<p class=\"err\">Printer not ready &mdash; the label was not printed.</p>";
@@ -259,10 +257,7 @@ class DymoLabelWebHandler : public web_server_idf::AsyncWebHandler {
     }
 
     html += "<form method=\"post\" action=\"/print\">";
-    html += make_field("line1", "Line 1 (large, max 20)", 20, lines[0]);
-    html += make_field("line2", "Line 2 (max 26)", 26, lines[1]);
-    html += make_field("line3", "Line 3 (max 26)", 26, lines[2]);
-    html += make_field("line4", "Line 4 (max 26)", 26, lines[3]);
+    html += make_field("line1", "Line 1 (large, max 20)", 20, line, "DYMO 450");
     html += "<button type=\"submit\">Print label</button></form></body></html>";
 
     request->send(200, "text/html", html.c_str());
@@ -831,8 +826,7 @@ void DymoPrintServer::handle_client_(int fd) {
            static_cast<unsigned>(this->out_bytes_.load(std::memory_order_relaxed)), drain_timeout ? " (DRAIN TIMEOUT)" : "");
 }
 
-bool DymoPrintServer::print_label(const std::string &line1, const std::string &line2, const std::string &line3,
-                                  const std::string &line4) {
+bool DymoPrintServer::print_label(const std::string &line) {
   if (!this->is_ready()) {
     ESP_LOGW(TAG, "Label requested but printer is not ready");
     return false;
@@ -840,20 +834,13 @@ bool DymoPrintServer::print_label(const std::string &line1, const std::string &l
 
   // 1-bit framebuffer, MSB = leftmost dot, one 84-byte stride per scan line.
   std::vector<uint8_t> fb(static_cast<size_t>(LABEL_STRIDE) * LABEL_H, 0);
-  // Same layout as the sample label: a large first line, then three smaller ones.
-  if (!line1.empty())
-    draw_line(fb.data(), LABEL_FONT_BIG, line1, 8);
-  if (!line2.empty())
-    draw_line(fb.data(), LABEL_FONT_SMALL, line2, 84);
-  if (!line3.empty())
-    draw_line(fb.data(), LABEL_FONT_SMALL, line3, 138);
-  if (!line4.empty())
-    draw_line(fb.data(), LABEL_FONT_SMALL, line4, 192);
+  // One large line, centred vertically: the big face is 52+14 dots tall, so its
+  // ascender line sits at (240 - 66) / 2 = 87.
+  draw_line(fb.data(), LABEL_FONT_BIG, line, (LABEL_H - (LABEL_FONT_BIG.ascent + LABEL_FONT_BIG.descent)) / 2);
 
   std::vector<uint8_t> job;
   build_escp(fb.data(), job);
-  ESP_LOGI(TAG, "Rendering label (%u bytes): \"%s\" / \"%s\" / \"%s\" / \"%s\"", static_cast<unsigned>(job.size()),
-           line1.c_str(), line2.c_str(), line3.c_str(), line4.c_str());
+  ESP_LOGI(TAG, "Rendering label (%u bytes): \"%s\"", static_cast<unsigned>(job.size()), line.c_str());
   return this->send_raw_(job.data(), job.size());
 }
 

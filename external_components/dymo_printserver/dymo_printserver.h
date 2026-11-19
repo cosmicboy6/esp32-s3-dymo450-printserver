@@ -53,14 +53,12 @@ class DymoPrintServer : public usb_host::USBClient {
   /// Selected / online (status bit 4 "Select").
   bool is_online() const { return this->is_ready() && (this->printer_status() & STATUS_SELECT) != 0; }
 
-  /// Render up to four lines of text into a DYMO ESC/P raster label and submit
-  /// it to the local raw-9100 pipeline. The first line is drawn large, the other
-  /// three smaller, all in DejaVuSans-Bold - the font of the sample label. Empty
-  /// lines are skipped and a line wider than the label is scaled down to fit.
-  /// Returns false when the printer is not ready or the job could not be handed
-  /// off to the print server.
-  bool print_label(const std::string &line1, const std::string &line2, const std::string &line3,
-                   const std::string &line4);
+  /// Render one line of text into a DYMO ESC/P raster label and submit it to the
+  /// local raw-9100 pipeline. The line is drawn in the large DejaVuSans-Bold face
+  /// (the font of the sample label) and centred vertically on the label; a line
+  /// wider than the label is scaled down to fit. Returns false when the printer
+  /// is not ready or the job could not be handed off to the print server.
+  bool print_label(const std::string &line);
 
  protected:
   void on_connected() override;
