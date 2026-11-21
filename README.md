@@ -1,5 +1,7 @@
 # DYMO LabelWriter 450 → ESP32-S3 Network Print Server
 
+[![Sponsor this project](https://img.shields.io/badge/Sponsor%20this%20project-FFDD00?style=flat-square&logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/hanshauberger)
+
 Turn a **USB-only DYMO LabelWriter 450** into a network printer using an
 **ESP32-S3** as a transparent **raw TCP-9100 (JetDirect / AppSocket) → USB
 Printer Class** bridge.
